@@ -149,7 +149,7 @@ function AdminPanel() {
             <ListItem key={message._id}>
               <ListItemText
                 primary={message.content}
-                secondary={`Channel: ${message.channelId} | Created: ${new Date(message.createdAt).toLocaleDateString()}`}
+                secondary={`Channel: ${message.channelName || 'Unknown Channel'} | Created: ${new Date(message.createdAt).toLocaleDateString()}`}
               />
               <ListItemSecondaryAction>
                 <IconButton

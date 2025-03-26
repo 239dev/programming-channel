@@ -437,13 +437,32 @@ async function initialize() {
                 const result = await messagesDb.view('messages', 'byChannel', {
                     include_docs: true
                 });
-                const messages = result.rows.map(row => ({
-                    _id: row.doc._id,
-                    content: row.doc.content,
-                    userId: row.doc.userId,
-                    channelId: row.doc.channelId,
-                    createdAt: row.doc.createdAt,
-                    parentId: row.doc.parentId
+
+                // Fetch channel information for each message
+                const messages = await Promise.all(result.rows.map(async (row) => {
+                    try {
+                        const channel = await channelsDb.get(row.doc.channelId);
+                        return {
+                            _id: row.doc._id,
+                            content: row.doc.content,
+                            userId: row.doc.userId,
+                            channelId: row.doc.channelId,
+                            channelName: channel.name,
+                            createdAt: row.doc.createdAt,
+                            parentId: row.doc.parentId
+                        };
+                    } catch (error) {
+                        console.error(`Error fetching channel for message ${row.doc._id}:`, error);
+                        return {
+                            _id: row.doc._id,
+                            content: row.doc.content,
+                            userId: row.doc.userId,
+                            channelId: row.doc.channelId,
+                            channelName: 'Unknown Channel',
+                            createdAt: row.doc.createdAt,
+                            parentId: row.doc.parentId
+                        };
+                    }
                 }));
                 res.json(messages);
             } catch (error) {
@@ -932,8 +951,20 @@ async function initialize() {
                 // Get all messages to calculate user metrics
                 const messagesResult = await messagesDb.find({
                     selector: {},
-                    fields: ['_id', 'userId', 'parentId', 'ratings', 'createdAt', 'userName', 'userDisplayName']
+                    fields: ['_id', 'userId', 'parentId', 'ratings', 'createdAt']
                 });
+                
+                // Get all users to map user IDs to display names
+                const usersResult = await usersDb.find({
+                    selector: {},
+                    fields: ['_id', 'displayName', 'username']
+                });
+                
+                // Create a map of user IDs to display names
+                const userDisplayNames = usersResult.docs.reduce((map, user) => {
+                    map[user._id] = user.displayName || user.username || 'Unknown User';
+                    return map;
+                }, {});
                 
                 // Process user statistics
                 const userStatsMap = messagesResult.docs.reduce((stats, message) => {
@@ -942,7 +973,7 @@ async function initialize() {
                     if (!stats[userId]) {
                         stats[userId] = {
                             userId: userId,
-                            displayName: message.userDisplayName || message.userName || userId.substring(0, 8),
+                            displayName: userDisplayNames[userId] || 'Unknown User',
                             totalMessages: 0,
                             rootPosts: 0,
                             replies: 0,
