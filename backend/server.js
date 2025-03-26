@@ -924,6 +924,89 @@ async function initialize() {
             }
         });
 
+        // Get user statistics (most posts, least posts, highest/lowest ranked)
+        app.get('/api/users/stats', authenticateToken, async (req, res) => {
+            try {
+                console.log('Fetching user statistics');
+                
+                // Get all messages to calculate user metrics
+                const messagesResult = await messagesDb.find({
+                    selector: {},
+                    fields: ['_id', 'userId', 'parentId', 'ratings', 'createdAt', 'userName', 'userDisplayName']
+                });
+                
+                // Process user statistics
+                const userStatsMap = messagesResult.docs.reduce((stats, message) => {
+                    const userId = message.userId;
+                    
+                    if (!stats[userId]) {
+                        stats[userId] = {
+                            userId: userId,
+                            displayName: message.userDisplayName || message.userName || userId.substring(0, 8),
+                            totalMessages: 0,
+                            rootPosts: 0,
+                            replies: 0,
+                            upvotes: 0,
+                            downvotes: 0,
+                            rating: 0 // will be calculated as upvotes - downvotes
+                        };
+                    }
+                    
+                    const userStat = stats[userId];
+                    userStat.totalMessages++;
+                    
+                    // Count root posts vs replies
+                    if (!message.parentId) {
+                        userStat.rootPosts++;
+                    } else {
+                        userStat.replies++;
+                    }
+                    
+                    // Sum ratings
+                    userStat.upvotes += message.ratings?.up || 0;
+                    userStat.downvotes += message.ratings?.down || 0;
+                    userStat.rating = userStat.upvotes - userStat.downvotes;
+                    
+                    return stats;
+                }, {});
+                
+                // Convert to array
+                const userStatsArray = Object.values(userStatsMap);
+                
+                // Sort for different categories
+                const mostPosts = [...userStatsArray]
+                    .sort((a, b) => b.totalMessages - a.totalMessages)
+                    .slice(0, 5);
+                    
+                const leastPosts = [...userStatsArray]
+                    .filter(user => user.totalMessages > 0) // Only include users with at least one post
+                    .sort((a, b) => a.totalMessages - b.totalMessages)
+                    .slice(0, 5);
+                    
+                const highestRanked = [...userStatsArray]
+                    .sort((a, b) => b.rating - a.rating)
+                    .slice(0, 5);
+                    
+                const lowestRanked = [...userStatsArray]
+                    .sort((a, b) => a.rating - b.rating)
+                    .slice(0, 5);
+                
+                res.json({
+                    mostPosts,
+                    leastPosts,
+                    highestRanked,
+                    lowestRanked
+                });
+                
+            } catch (error) {
+                console.error('Error fetching user statistics:', error);
+                res.status(500).json({ 
+                    error: 'Failed to fetch user statistics',
+                    details: error.message 
+                });
+            }
+        });
+
         // Get message suggestions based on query
         app.get('/api/search/suggestions', authenticateToken, async (req, res) => {
             try {

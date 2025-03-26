@@ -72,7 +72,9 @@ const SearchPage = () => {
             totalMessages: user.totalMessages ?? 0,
             rootPosts: user.rootPosts ?? 0,
             replies: user.replies ?? 0,
-            classification: user.classification || 'UNCLASSIFIED'
+            rating: user.rating ?? 0,
+            upvotes: user.upvotes ?? 0,
+            downvotes: user.downvotes ?? 0
           };
         });
       };
@@ -321,25 +323,25 @@ const SearchPage = () => {
         <Grid item xs={12} md={6}>
           {renderStatsTable('Most Active Users', 
             userStats.mostPosts || [], 
-            ['Display Name', 'Total Messages', 'Root Posts', 'Replies', 'Classification']
+            ['Display Name', 'Total Messages', 'Root Posts', 'Replies']
           )}
         </Grid>
         <Grid item xs={12} md={6}>
           {renderStatsTable('Least Active Users', 
             userStats.leastPosts || [], 
-            ['Display Name', 'Total Messages', 'Root Posts', 'Replies', 'Classification']
+            ['Display Name', 'Total Messages', 'Root Posts', 'Replies']
           )}
         </Grid>
         <Grid item xs={12} md={6}>
           {renderStatsTable('Highest Ranked Users', 
             userStats.highestRanked || [], 
-            ['Display Name', 'Net Rating', 'Upvotes', 'Downvotes', 'Classification']
+            ['Display Name', 'Rating', 'Upvotes', 'Downvotes']
           )}
         </Grid>
         <Grid item xs={12} md={6}>
           {renderStatsTable('Lowest Ranked Users', 
             userStats.lowestRanked || [], 
-            ['Display Name', 'Net Rating', 'Upvotes', 'Downvotes', 'Classification']
+            ['Display Name', 'Rating', 'Upvotes', 'Downvotes']
           )}
         </Grid>
       </Grid>
