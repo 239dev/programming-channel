@@ -58,6 +58,14 @@ const SearchPage = () => {
       console.log('=== USER STATS RESPONSE ===');
       console.log('Full Response:', response);
       console.log('Response Data:', response.data);
+      
+      // Log each category for debugging
+      if (response.data.mostPosts) {
+        console.log('Most Posts (First User Example):', response.data.mostPosts[0]);
+      }
+      if (response.data.highestRanked) {
+        console.log('Highest Ranked (First User Example):', response.data.highestRanked[0]);
+      }
 
       // Validate response structure
       const validateStatsArray = (statsArray) => {
@@ -296,13 +304,39 @@ const SearchPage = () => {
                       <TableRow key={index}>
                         <TableCell>{user.displayName || 'Unknown User'}</TableCell>
                         {columns.slice(1).map((col) => {
-                          // Robust handling of different column types
-                          const normalizedCol = col.toLowerCase().replace(/\s/g, '');
-                          const value = user[normalizedCol] ?? user[col] ?? 'N/A';
+                          // Improved column name normalization
+                          let propertyName;
+                          
+                          // Map UI column names to actual property names
+                          switch(col) {
+                            case 'Total Messages':
+                              propertyName = 'totalMessages';
+                              break;
+                            case 'Root Posts':
+                              propertyName = 'rootPosts';
+                              break;
+                            case 'Replies':
+                              propertyName = 'replies';
+                              break;
+                            case 'Rating':
+                              propertyName = 'rating';
+                              break;
+                            case 'Upvotes':
+                              propertyName = 'upvotes';
+                              break;
+                            case 'Downvotes':
+                              propertyName = 'downvotes';
+                              break;
+                            default:
+                              // Fallback to normalized name if no direct mapping
+                              propertyName = col.toLowerCase().replace(/\s/g, '');
+                          }
+                          
+                          const value = user[propertyName] ?? 'N/A';
                           
                           // Additional logging for problematic columns
                           if (value === 'N/A') {
-                            console.warn(`Undefined value for column ${col} in user:`, user);
+                            console.warn(`Undefined value for column ${col} (${propertyName}) in user:`, user);
                           }
 
                           return <TableCell key={col}>{value}</TableCell>;
