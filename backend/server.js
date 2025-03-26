@@ -226,20 +226,52 @@ async function initialize() {
             try {
                 const { username, email, password, displayName } = req.body;
 
+                // Validate required fields
                 if (!username || !email || !password || !displayName) {
-                    return res.status(400).json({ error: 'All fields are required' });
+                    return res.status(400).json({ 
+                        error: 'All fields are required',
+                        details: {
+                            username: !username ? 'Username is required' : null,
+                            email: !email ? 'Email is required' : null,
+                            password: !password ? 'Password is required' : null,
+                            displayName: !displayName ? 'Display name is required' : null
+                        }
+                    });
+                }
+
+                // Validate email format
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    return res.status(400).json({ 
+                        error: 'Invalid email format',
+                        details: { email: 'Please enter a valid email address' }
+                    });
+                }
+
+                // Validate password strength
+                if (password.length < 6) {
+                    return res.status(400).json({ 
+                        error: 'Password too weak',
+                        details: { password: 'Password must be at least 6 characters long' }
+                    });
                 }
 
                 // Check if username exists
                 const existingUser = await usersDb.view('users', 'byUsername', { key: username });
                 if (existingUser.rows.length > 0) {
-                    return res.status(400).json({ error: 'Username already exists' });
+                    return res.status(400).json({ 
+                        error: 'Username already exists',
+                        details: { username: 'This username is already taken' }
+                    });
                 }
 
                 // Check if email exists
                 const existingEmail = await usersDb.view('users', 'byEmail', { key: email });
                 if (existingEmail.rows.length > 0) {
-                    return res.status(400).json({ error: 'Email already exists' });
+                    return res.status(400).json({ 
+                        error: 'Email already exists',
+                        details: { email: 'This email is already registered' }
+                    });
                 }
 
                 const hashedPassword = await bcrypt.hash(password, 10);
@@ -254,10 +286,25 @@ async function initialize() {
                 };
 
                 const result = await usersDb.insert(user);
-                res.json({ success: true, id: result.id });
+                
+                // Return success response with user data (excluding password)
+                res.status(201).json({ 
+                    success: true, 
+                    message: 'Registration successful',
+                    user: {
+                        id: result.id,
+                        username: user.username,
+                        displayName: user.displayName,
+                        email: user.email,
+                        role: user.role
+                    }
+                });
             } catch (error) {
                 console.error('Registration error:', error);
-                res.status(500).json({ error: error.message });
+                res.status(500).json({ 
+                    error: 'Registration failed',
+                    message: error.message
+                });
             }
         });
 
