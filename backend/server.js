@@ -858,7 +858,7 @@ async function initialize() {
         // Search messages by content
         app.get('/api/search/messages', authenticateToken, async (req, res) => {
             try {
-                const { query, userId, sortBy } = req.query;
+                const { query, userId, channelId, sortBy } = req.query;
 
                 // Build the search query
                 const searchOptions = {
@@ -869,12 +869,18 @@ async function initialize() {
 
                 // Filter by content if query is provided
                 if (query) {
-                    searchOptions.selector.content = { $regex: new RegExp(query, 'i') };
+                    // Use case-insensitive string matching
+                    searchOptions.selector.content = { $regex: query.toLowerCase() };
                 }
 
                 // Filter by user if userId is provided
                 if (userId) {
                     searchOptions.selector.userId = userId;
+                }
+
+                // Filter by channel if channelId is provided
+                if (channelId) {
+                    searchOptions.selector.channelId = channelId;
                 }
 
                 // Perform the search
@@ -884,18 +890,20 @@ async function initialize() {
                 const searchResults = await Promise.all(result.docs.map(async (message) => {
                     try {
                         const user = await usersDb.get(message.userId);
+                        const channel = await channelsDb.get(message.channelId);
                         return {
                             _id: message._id,
                             content: message.content,
                             userId: message.userId,
                             displayName: user.displayName,
                             channelId: message.channelId,
+                            channelName: channel.name,
                             createdAt: message.createdAt,
                             ratings: message.ratings,
                             depth: message.depth
                         };
                     } catch (userError) {
-                        console.error(`Error fetching user for message ${message._id}:`, userError);
+                        console.error(`Error fetching user or channel for message ${message._id}:`, userError);
                         return message;
                     }
                 }));
@@ -926,7 +934,14 @@ async function initialize() {
                     }
                 }
 
-                res.json(searchResults);
+                // Filter results to match query case-insensitively
+                const filteredResults = query 
+                    ? searchResults.filter(result => 
+                        result.content.toLowerCase().includes(query.toLowerCase())
+                    )
+                    : searchResults;
+
+                res.json(filteredResults);
             } catch (error) {
                 console.error('Error searching messages:', error);
                 res.status(500).json({ 

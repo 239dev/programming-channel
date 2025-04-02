@@ -29,6 +29,10 @@ const SearchPage = () => {
   const [sortBy, setSortBy] = useState('relevance');
   const [order, setOrder] = useState('desc');
   const [page, setPage] = useState(1);
+  const [selectedChannel, setSelectedChannel] = useState('');
+
+  // Channels
+  const [channels, setChannels] = useState([]);
 
   // Search results
   const [searchResults, setSearchResults] = useState([]);
@@ -43,29 +47,30 @@ const SearchPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
 
-  // Fetch user statistics
-  const fetchUserStats = async () => {
+  // Fetch channels
+  const fetchChannels = async () => {
     try {
-      // Increase timeout and add more robust error handling
-      const response = await axios.get('/api/users/stats', {
-        timeout: 15000, // Increased timeout to 15 seconds
+      const response = await axios.get('/api/channels', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
+      setChannels(response.data);
+    } catch (error) {
+      console.error('Error fetching channels:', error);
+      setError('Failed to fetch channels');
+    }
+  };
 
-      // Extensive logging of response
-      console.log('=== USER STATS RESPONSE ===');
-      console.log('Full Response:', response);
-      console.log('Response Data:', response.data);
-      
-      // Log each category for debugging
-      if (response.data.mostPosts) {
-        console.log('Most Posts (First User Example):', response.data.mostPosts[0]);
-      }
-      if (response.data.highestRanked) {
-        console.log('Highest Ranked (First User Example):', response.data.highestRanked[0]);
-      }
+  // Fetch user statistics
+  const fetchUserStats = async () => {
+    try {
+      const response = await axios.get('/api/users/stats', {
+        timeout: 15000,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
 
       // Validate response structure
       const validateStatsArray = (statsArray) => {
@@ -74,7 +79,6 @@ const SearchPage = () => {
           return [];
         }
         return statsArray.map(user => {
-          // Ensure all expected properties exist
           return {
             displayName: user.displayName || 'Unknown User',
             totalMessages: user.totalMessages ?? 0,
@@ -98,37 +102,8 @@ const SearchPage = () => {
       // Clear any previous errors
       setError(null);
     } catch (error) {
-      // Comprehensive error handling
-      console.error('=== USER STATS FETCH ERROR ===');
-      console.error('Full Error Object:', error);
-      
-      // Check for specific error types
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error('Server Response Error:', error.response.data);
-        setError(`Server Error: ${error.response.status} - ${error.response.data.error || 'Unknown error'}`);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error('No Response Received:', error.request);
-        setError('No response received from server. Please check your network connection.');
-      } else if (error.code === 'ECONNABORTED') {
-        // Request timeout
-        console.error('Request Timeout');
-        setError('Request timed out. The server might be experiencing high load.');
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error('Unexpected Error:', error.message);
-        setError(`Unexpected error: ${error.message}`);
-      }
-
-      // Set default empty statistics to prevent rendering errors
-      setUserStats({
-        mostPosts: [],
-        leastPosts: [],
-        highestRanked: [],
-        lowestRanked: []
-      });
+      console.error('Error fetching user stats:', error);
+      setError('Failed to fetch user statistics');
     }
   };
 
@@ -144,15 +119,6 @@ const SearchPage = () => {
     setError(null);
 
     try {
-      console.log('Searching with parameters:', {
-        query: searchQuery,
-        type: searchType,
-        sortBy,
-        order,
-        page,
-        limit: 10
-      });
-
       const response = await axios.get('/api/search/messages', {
         params: {
           query: searchQuery,
@@ -160,51 +126,42 @@ const SearchPage = () => {
           sortBy,
           order,
           page,
-          limit: 10  // Consistent with backend
+          channelId: selectedChannel,
+          limit: 10
         },
-        // Add timeout to prevent hanging requests
-        timeout: 10000
+        timeout: 10000,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
 
       // Validate response
-      if (!response.data || !Array.isArray(response.data.messages)) {
+      if (!response.data || !Array.isArray(response.data)) {
         console.error('Invalid search response structure:', response.data);
         throw new Error('Invalid search response format');
       }
 
-      // Log search results for debugging
-      console.log('Search Results:', response.data);
-
       // Check if messages array is empty
-      if (response.data.messages.length === 0) {
+      if (response.data.length === 0) {
         setError('No results found. Try a different search query.');
       }
 
-      setSearchResults(response.data.messages);
-      setTotalPages(response.data.totalPages || 1);
+      setSearchResults(response.data);
+      setTotalPages(Math.ceil(response.data.length / 10)); // Basic pagination
     } catch (err) {
-      // Log full error details
-      console.error('Full Error Object:', err);
-      console.error('Error Response:', err.response);
+      console.error('Search error:', err);
       
-      // More detailed error handling
       let errorMessage = 'Search failed. Please try again later.';
       
       if (err.response) {
-        // The request was made and the server responded with a status code
         errorMessage = err.response.data.details || 
                        err.response.data.error || 
                        errorMessage;
       } else if (err.request) {
-        // The request was made but no response was received
         errorMessage = 'No response from server. Check your network connection.';
       } else if (err.code === 'ECONNABORTED') {
-        // Request timeout
         errorMessage = 'Search request timed out. Please try again.';
       }
-      
-      // Log specific error details
-      console.error('Detailed Error Message:', errorMessage);
       
       setError(errorMessage);
       setSearchResults([]);
@@ -214,14 +171,14 @@ const SearchPage = () => {
     }
   };
 
-  // Initial load and stats fetch
+  // Initial load
   useEffect(() => {
+    fetchChannels();
     fetchUserStats();
   }, []);
 
-  // Render search results with robust error handling
+  // Render search results
   const renderSearchResults = () => {
-    // Ensure searchResults is an array and not empty
     if (!Array.isArray(searchResults) || searchResults.length === 0) {
       return <p>No results found.</p>;
     }
@@ -232,6 +189,7 @@ const SearchPage = () => {
           <TableHead>
             <TableRow>
               <TableCell>Content</TableCell>
+              <TableCell>Channel</TableCell>
               <TableCell>Author</TableCell>
               <TableCell>Created At</TableCell>
               <TableCell>Ratings (Up/Down)</TableCell>
@@ -239,13 +197,13 @@ const SearchPage = () => {
           </TableHead>
           <TableBody>
             {searchResults.map((result, index) => {
-              // Robust handling of ratings
               const upvotes = result.ratings?.up ?? 0;
               const downvotes = result.ratings?.down ?? 0;
 
               return (
                 <TableRow key={result._id || index}>
                   <TableCell>{result.content}</TableCell>
+                  <TableCell>{result.channelName || 'Unknown Channel'}</TableCell>
                   <TableCell>
                     {result.displayName || `User ${result.userId.slice(0, 8)}`}
                   </TableCell>
@@ -264,18 +222,15 @@ const SearchPage = () => {
     );
   };
 
-  // Render user statistics with robust error handling
+  // Render user statistics
   const renderUserStats = () => {
-    // Ensure userStats exists and has the required properties
+    // Existing renderUserStats implementation
     if (!userStats || !userStats.highestRanked) {
       return <Typography variant="body1">No user statistics available</Typography>;
     }
 
-    // Helper function to render a user stats table
+    // Existing renderStatsTable implementation
     const renderStatsTable = (title, data, columns) => {
-      // Log data for debugging
-      console.log(`${title} Data:`, data);
-
       return (
         <Paper sx={{ mt: 2, p: 2 }}>
           <Typography variant="h6">{title}</Typography>
@@ -296,54 +251,16 @@ const SearchPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.map((user, index) => {
-                    // Log each user for debugging
-                    console.log(`User ${index}:`, user);
-
-                    return (
-                      <TableRow key={index}>
-                        <TableCell>{user.displayName || 'Unknown User'}</TableCell>
-                        {columns.slice(1).map((col) => {
-                          // Improved column name normalization
-                          let propertyName;
-                          
-                          // Map UI column names to actual property names
-                          switch(col) {
-                            case 'Total Messages':
-                              propertyName = 'totalMessages';
-                              break;
-                            case 'Root Posts':
-                              propertyName = 'rootPosts';
-                              break;
-                            case 'Replies':
-                              propertyName = 'replies';
-                              break;
-                            case 'Rating':
-                              propertyName = 'rating';
-                              break;
-                            case 'Upvotes':
-                              propertyName = 'upvotes';
-                              break;
-                            case 'Downvotes':
-                              propertyName = 'downvotes';
-                              break;
-                            default:
-                              // Fallback to normalized name if no direct mapping
-                              propertyName = col.toLowerCase().replace(/\s/g, '');
-                          }
-                          
-                          const value = user[propertyName] ?? 'N/A';
-                          
-                          // Additional logging for problematic columns
-                          if (value === 'N/A') {
-                            console.warn(`Undefined value for column ${col} (${propertyName}) in user:`, user);
-                          }
-
-                          return <TableCell key={col}>{value}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })
+                  data.map((user, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{user.displayName || 'Unknown User'}</TableCell>
+                      {columns.slice(1).map((col) => {
+                        const propertyName = col.toLowerCase().replace(/\s/g, '');
+                        const value = user[propertyName] ?? 'N/A';
+                        return <TableCell key={col}>{value}</TableCell>;
+                      })}
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -401,7 +318,7 @@ const SearchPage = () => {
       {activeTab === 0 && (
         <>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
                 label="Search Query"
@@ -413,6 +330,23 @@ const SearchPage = () => {
                   }
                 }}
               />
+            </Grid>
+            <Grid item xs={12} sm={2}>
+              <FormControl fullWidth>
+                <InputLabel>Channel</InputLabel>
+                <Select
+                  value={selectedChannel}
+                  label="Channel"
+                  onChange={(e) => setSelectedChannel(e.target.value)}
+                >
+                  <MenuItem value="">All Channels</MenuItem>
+                  {channels.map((channel) => (
+                    <MenuItem key={channel._id} value={channel._id}>
+                      {channel.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={2}>
               <FormControl fullWidth>
@@ -435,22 +369,10 @@ const SearchPage = () => {
                   label="Sort By"
                   onChange={(e) => setSortBy(e.target.value)}
                 >
-                  <MenuItem value="relevance">Relevance</MenuItem>
-                  <MenuItem value="date">Date</MenuItem>
-                  <MenuItem value="rating">Rating</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={2}>
-              <FormControl fullWidth>
-                <InputLabel>Order</InputLabel>
-                <Select
-                  value={order}
-                  label="Order"
-                  onChange={(e) => setOrder(e.target.value)}
-                >
-                  <MenuItem value="desc">Descending</MenuItem>
-                  <MenuItem value="asc">Ascending</MenuItem>
+                  <MenuItem value="newest">Newest</MenuItem>
+                  <MenuItem value="oldest">Oldest</MenuItem>
+                  <MenuItem value="mostRated">Most Rated</MenuItem>
+                  <MenuItem value="leastRated">Least Rated</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
